@@ -11,8 +11,8 @@ import datetime
 from functools import wraps
 from flask import Flask, flash, redirect, render_template, \
     request, session, url_for
-from flask.ext.sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+from flask.ext.sqlalchemy import SQLAlchemy
 
 
 ################
@@ -40,25 +40,34 @@ def login_required(test):
             return redirect(url_for('login'))
     return wrap
 
+
 def flash_errors(form):
     for field, errors in form.errors.items():
         for error in errors:
-            flash(u"Error in the %s field - %s" % (getattr(form, field).label.text, error), 'error')
+            flash(u"Error in the %s field - %s" % (
+                getattr(form, field).label.text, error), 'error')
+
 
 def open_tasks():
-    return db.session.query(Task).filter_by(status='1').order_by(Task.due_date.asc())
+    return db.session.query(Task).filter_by(
+        status='1').order_by(Task.due_date.asc())
+
 
 def closed_tasks():
-    return db.session.query(Task).filter_by(status='0').order_by(Task.due_date.asc())
+    return db.session.query(Task).filter_by(
+        status='0').order_by(Task.due_date.asc())
+
 
 ########################
 #### route handlers ####
 ########################
 
 @app.route('/logout/')
+@login_required
 def logout():
     session.pop('logged_in', None)
     session.pop('user_id', None)
+    session.pop('role', None)
     flash('Goodbye!')
     return redirect(url_for('login'))
 
@@ -73,12 +82,11 @@ def login():
             if user is not None and user.password == request.form['password']:
                 session['logged_in'] = True
                 session['user_id'] = user.id
+                session['role'] = user.role
                 flash('Welcome!')
                 return redirect(url_for('tasks'))
             else:
                 error = 'Invalid username or password.'
-        else:
-            error = 'Both fields are required.'
     return render_template('login.html', form=form, error=error)
 
 
@@ -135,28 +143,39 @@ def new_task():
             flash('New entry was successfully posted. Thanks.')
             return redirect(url_for('tasks'))
     return render_template(
-        'tasks.html', 
-        form=form, 
+        'tasks.html',
+        form=form,
         error=error,
         open_tasks=open_tasks(),
         closed_tasks=closed_tasks()
-        )
+    )
+
 
 @app.route('/complete/<int:task_id>/')
 @login_required
 def complete(task_id):
     new_id = task_id
-    db.session.query(Task).filter_by(task_id=new_id).update({"status": "0"})
-    db.session.commit()
-    flash('The task is complete. Nice.')
-    return redirect(url_for('tasks'))
+    task = db.session.query(Task).filter_by(task_id=new_id)
+    if session['user_id'] == task.first().user_id or session['role'] == "admin":
+        task.update({"status": "0"})
+        db.session.commit()
+        flash('The task is complete. Nice.')
+        return redirect(url_for('tasks'))
+    else:
+        flash('You can only update tasks that belong to you.')
+        return redirect(url_for('tasks'))
 
 
 @app.route('/delete/<int:task_id>/')
 @login_required
 def delete_entry(task_id):
     new_id = task_id
-    db.session.query(Task).filter_by(task_id=new_id).delete()
-    db.session.commit()
-    flash('The task was deleted. Why not add a new one?')
-    return redirect(url_for('tasks'))
+    task = db.session.query(Task).filter_by(task_id=new_id)
+    if session['user_id'] == task.first().user_id or session['role'] == "admin":
+        task.delete()
+        db.session.commit()
+        flash('The task was deleted. Why not add a new one?')
+        return redirect(url_for('tasks'))
+    else:
+        flash('You can only delete tasks that belong to you.')
+        return redirect(url_for('tasks'))
