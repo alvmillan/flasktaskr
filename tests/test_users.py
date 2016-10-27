@@ -4,9 +4,9 @@
 import os
 import unittest
 
-from views import app, db
-from _config import basedir
-from models import User
+from project import app, db
+from project._config import basedir
+from project.models import Task, User
 
 TEST_DB = 'test.db'
 
@@ -175,6 +175,13 @@ class UsersTests(unittest.TestCase):
         users = db.session.query(User).all()
         for user in users:
             self.assertEqual(user.role, 'user')
+
+    def test_task_template_displays_logged_in_user_name(self):
+        self.register(
+            'Fletcher','fletcher@realpython.com','python101','python101')
+        self.login('Fletcher','pyhton101')
+        response = self.app.get('tasks/', follow_redirects=True)
+        self.assertIn(b'Fletcher', response.data)
 
 
 if __name__ == "__main__":
